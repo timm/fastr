@@ -84,31 +84,38 @@ def norm(v, lo, mu, hi): # maps v ==> 0..1
   return 1 - (hi-v)**2 / (w*(hi-mu))
 
 # --------------------------------------------------------------------
+def proj(x, lohi, row): 
+  a,b = x(row, lohi.lo), x(row, lohi.hi)
+  return (a*a + lohi.c*lohi.c - b*b) / (2*lohi.c + 1/BIG)
 
-def cosine(a, b, c): return (a*a + c*c - b*b) / (2*c + 1/BIG)
-
-def proj(tbl,a,b,c, row):
-  return cosine(distx(tbl, row, a), distx(tbl, row, b), c)
+def fastmap(rows, x, y):
+  w = choice(rows)
+  a = max(rows, key=lambda r: x(w, r))
+  b = max(rows, key=lambda r: x(a, r))
+  if y(b) < y(a): a, b = b, a
+  lohi = o(lo=a, hi=b, c=x(a, b))
+  return lohi, sorted(rows, key=lambda r: proj(x, lohi, r))
 
 def fastmapr(tbl, rows, stop=4):
-  if len(rows) <= stop: return o(rows=rows)
-  w = choice(rows)
-  a = max(rows, key=lambda r: distx(tbl, w, r))
-  b = max(rows, key=lambda r: distx(tbl, a, r))
-  if disty(tbl, b) < disty(tbl, a): a, b = b, a
-  rows.sort(key=lambda r: proj(tbl, a,b,c, r))
-  n = len(rows) // 2
-  return o(rows=rows, a=a, b=b, c=c,
-           mid   = proj(tbl, here, rows[n]),
-           goods = fastmapr(tbl, rows[:n], stop),
-           bads  = fastmapr(tbl, rows[n:], stop))
+  x = lambda r1, r2: distx(tbl, r1, r2)
+  y = lambda r: disty(tbl, r)
+  def go(rows):
+    t = o(rows=rows)
+    if len(rows) > stop:
+      lohi, t.rows = fastmap(rows, x, y)
+      n = len(t.rows) // 2
+      t.lohi, t.mid = lohi, proj(x, lohi, t.rows[n])
+      t.goods, t.bads = go(t.rows[:n]), go(t.rows[n:])
+    return t
+  return go(rows)
 
-def leaf(tbl, node, row):
-  while hasattr(node, "mid"):
-    ok   = proj(tbl, node, row) <= node.mid
-    node = node.goods if ok else node.bads
-  return node
-  
+def leaf(tbl, t, row):
+  x = lambda r1, r2: distx(tbl, r1, r2)
+  while hasattr(t, "mid"):
+    ok = proj(x, t.lohi, row) <= t.mid
+    t = t.goods if ok else t.bads
+  return t
+ 
 # --------------------------------------------------------------------
 def thing(s):
   try: return int(s)
