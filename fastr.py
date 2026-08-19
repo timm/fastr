@@ -9,7 +9,7 @@
 import sys; sys.dont_write_bytecode = True
 from inspect import signature 
 from types import SimpleNamespace as o
-from random import sample,seed,random as rand
+from random import choice,sample,seed,random as rand
 
 the=o(ows=21, a=30, seed=True)
 BIG=1e32
@@ -84,14 +84,31 @@ def norm(v, lo, mu, hi): # maps v ==> 0..1
   return 1 - (hi-v)**2 / (w*(hi-mu))
 
 # --------------------------------------------------------------------
-def fastmap(dist,rows):
-  w = sample(rows)
-  a = max(rows, key=lambda r: dist(w,r))
-  b = max(rows, key=lambda r: dist(a,r))
-  C = dist(a,b)
-  rows.sort(key=lambda r: (dist(r,a)**2 + c**2 - dist(r,b)**2)/(2*c))
-  n = len(rows//2)
-  return o(lorows[:n]
+
+def cosine(a, b, c): return (a*a + c*c - b*b) / (2*c + 1/BIG)
+
+def proj(tbl,a,b,c, row):
+  return cosine(distx(tbl, row, a), distx(tbl, row, b), c)
+
+def fastmapr(tbl, rows, stop=4):
+  if len(rows) <= stop: return o(rows=rows)
+  w = choice(rows)
+  a = max(rows, key=lambda r: distx(tbl, w, r))
+  b = max(rows, key=lambda r: distx(tbl, a, r))
+  if disty(tbl, b) < disty(tbl, a): a, b = b, a
+  rows.sort(key=lambda r: proj(tbl, a,b,c, r))
+  n = len(rows) // 2
+  return o(rows=rows, a=a, b=b, c=c,
+           mid   = proj(tbl, here, rows[n]),
+           goods = fastmapr(tbl, rows[:n], stop),
+           bads  = fastmapr(tbl, rows[n:], stop))
+
+def leaf(tbl, node, row):
+  while hasattr(node, "mid"):
+    ok   = proj(tbl, node, row) <= node.mid
+    node = node.goods if ok else node.bads
+  return node
+  
 # --------------------------------------------------------------------
 def thing(s):
   try: return int(s)
