@@ -11,7 +11,6 @@ Options:
   --file=/Users/timm/gits/moot/optimize/misc/auto93.csv""" 
 
 import re, sys; sys.dont_write_bytecode = True
-from inspect import signature 
 from types import SimpleNamespace as o
 from random import choice,sample,seed,random as rand
 BIG=1e32
@@ -33,8 +32,8 @@ def Cols(names): # turn a list of names into Syms or Nums
     (y if s[-1] in "+-" else x)[at] = s[-1] == "+"
   return o(all=all, x=x, y=y, names=names)
 
-def adds(src, i):
-  i = i or Num()
+def adds(src, i=None):
+  i = Num() if i is None else i
   for v in src: i = add(i, v)
   return i
 
@@ -66,7 +65,7 @@ def mid(i):
 def disty(tbl, row):
   d,n,p = 0, 1/BIG, the.p
   for c,w in tbl.cols.y.items():
-    v = norm(row[c], *tbl.cols.all[c][1:])
+    v = norm(tbl.cols.all[c], row[c])
     if v != "?": n,d = n + 1, d + abs(v - w)**p
   return (d/n) ** (1/p)
 
@@ -79,18 +78,19 @@ def distx(tbl, row1,row2):
 def distx1(col,a,b):
   if a==b=="?": return 1
   if type(col) is dict: return a != b
-  a,b = norm(a,*col[1:]), norm(b,*col[1:])
+  a,b = norm(col,a), norm(col,b)
   if a=="?": a = 1 if b < 0.5 else 0
   if b=="?": b = 1 if a < 0.5 else 0
   return abs(a-b)
 
-def norm(v, lo, mu, hi): # maps v ==> 0..1
-  if v=="?": return v
-  if v <= lo: return 0
-  if v >= hi: return 1
+def norm(col, i): # maps i ==> 0..1
+  _,lo,mu,hi = col
+  if i=="?": return i
+  if i <= lo: return 0
+  if i >= hi: return 1
   w = hi - lo
-  if v <= mu: return (v-lo)**2 / (w*(mu-lo))
-  return 1 - (hi-v)**2 / (w*(hi-mu))
+  if i <= mu: return (i-lo)**2 / (w*(mu-lo))
+  return 1 - (hi-i)**2 / (w*(hi-mu))
 
 # ---------------------------------------------------------------
 def proj(x, lohi, row): 
@@ -141,8 +141,8 @@ def csv(f):
 # ---------------------------------------------------------------
 def test_h()     : print(__doc__)
 def test_the()   : print(the)
-def test_seed(s) : the.seed = s
-def test_file(f) : the.file = f
+def test__seed(s): the.seed = s
+def test__file(f): the.file = f
 
 def test_it():
   assert it("2") == 2 and it("2.1") == 2.1
@@ -171,8 +171,8 @@ def test_mid():
   print(mid(Tbl(csv(the.file))))
 
 def test_norm():
-  i = adds(sample(range(1000), 100), Num())
-  vs = [norm(v, *i[1:]) for v in range(0, 1000, 99)]
+  num = adds(sample(range(1000), 100), Num())
+  vs = [norm(num, v) for v in range(0, 1000, 99)]
   assert all(0 <= v <= 1 for v in vs) and vs == sorted(vs)
 
 def test_distx():
@@ -216,13 +216,11 @@ def test_leaf():
 
 def test_all():
   for s, f in list(globals().items()):
-    if s.startswith("test_") and f is not test_all \
-       and not signature(f).parameters:
-      print("\n#", s); run(f)
+    if re.match(r"test_(?!_|all)", s): print("\n#", s); run(f)
 
 # ---------------------------------------------------------------
-def run(f, v=None):
-  try: seed(the.seed); f(v) if signature(f).parameters else f()
+def run(f, *v):
+  try: seed(the.seed); f(*v)
   except Exception: import traceback; traceback.print_exc()
 
 the=o(**{k:it(v) for k,v in re.findall(r"(\w+)=(\S+)",__doc__)})
@@ -231,4 +229,5 @@ seed(the.seed)
 if __name__ == "__main__":
   for s, v in zip(sys.argv, sys.argv[1:] + [None]):
     if f := globals().get(f"test{s.replace('-', '_')}"):
-      run(f, it(v) if v else None) 
+      if s[1] == "-": run(f, it(v))
+      else:           run(f) 
