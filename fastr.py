@@ -10,6 +10,7 @@ Options:
   --few=256      sub-sample size for pole finding
   --k=5          nearest neighbors used in a leaf
   --check=5      optimization: how many top picks to evaluate
+  --bins=10      number of bins for discretization
   --seed=1234    random number genration
   --file=/Users/timm/gits/moot/optimize/misc/auto93.csv
  """ 
@@ -68,12 +69,11 @@ def adds(src, i=None): # add in all values in src.
   return i
 
 def welford(n,mu,m2, v, w):  # update a Num
-  n += w
-  if n < 1: return Num()
+  n  += w
   d   = v - mu
   mu += w * d / n
   m2 += w * d * (v - mu)
-  return (n, mu, m2)
+  return Num() if n < 1 else (n, mu, m2)
 
 def mids(tbl, cols=None): # return middle of columns
   return [mid(col) for col in cols or tbl.cols.all]
@@ -88,6 +88,23 @@ def ent(d): # a diversity measure for Symbolic columns
   N = sum(d.values())
   return -sum(n/N*log(n/N,2) for n in d.values() if n > 0)
 
+def discretize(best, rest, bins=None): # best,rest: Nums of 2 classes
+  "Bins scored b^2/(b+r); b,r = cdf mass of bin in best,rest."
+  bins  = bins or the.bins
+  lo = min(best[1] - 3*sd(best), rest[1] - 3*sd(rest))
+  hi = max(best[1] + 3*sd(best), rest[1] + 3*sd(rest))
+  cuts = [lo + k*(hi - lo)/bins for k in range(bins + 1)]
+  B = [norm(best, c) for c in cuts]
+  R = [norm(rest, c) for c in cuts]
+  def score(i, j):
+    b, r = B[j] - B[i], R[j] - R[i]
+    return b*b / (b + r + 1/BIG)
+  spans  = [(i, i+1)   for i in range(bins)]      # single bins
+  spans += [(0, j)     for j in range(2, bins)]   # prefixes
+  spans += [(i, bins)  for i in range(1, bins-1)] # suffixes
+  return [o(lo=cuts[i], hi=cuts[j], score=score(i, j))
+          for i, j in spans]  # note: whole column excluded
+
 # ---------------------------------------------------------------
 def disty(tbl, row): # distance of goals to the reference optimum
   d,n,p = 0, 1/BIG, the.p
@@ -99,10 +116,10 @@ def disty(tbl, row): # distance of goals to the reference optimum
 def distx(tbl, row1,row2): # distance between none-goal balues
   d,n,p = 0, 1/BIG, the.p
   for c in tbl.cols.x:
-    n,d = n + 1, d + distxq(tbl.cols.all[c], row1[c],row2[c])**p
+    n,d = n + 1, d + _distx(tbl.cols.all[c], row1[c],row2[c])**p
   return (d/n) ** (1/p)
 
-def distxq(col,a,b):
+def _distx(col,a,b): # helper function for distx
   if a==b=="?": return 1
   if type(col) is dict: return a != b
   a,b = norm(col,a), norm(col,b)
@@ -144,7 +161,7 @@ def proj(x, lohi, row): # project x onto a line a -> b
   a,b = x(row, lohi.lo), x(row, lohi.hi)
   return (a*a + lohi.c*lohi.c - b*b) / (2*lohi.c + 1/BIG)
 
-def fastmap(rows, x, y):
+def fastmap(rows, x, y): # split data according to 2 distance points
   some = sample(rows, min(the.few, len(rows)))
   w    = choice(some)
   a    = max(some, key=lambda r: x(w, r))
@@ -153,13 +170,12 @@ def fastmap(rows, x, y):
   lohi = o(lo=a, hi=b, c=x(a, b))
   return lohi, sorted(rows, key=lambda r: proj(x, lohi, r))
 
-def fastmapr(tbl, rows, stop=None):
+def fastmapr(tbl, rows): # recusively split data on distance points  
   x = lambda r1, r2: distx(tbl, r1, r2)
   y = lambda r: disty(tbl, r)
-  stop = stop or the.stop
   def go(rows):
     t = o(rows=rows)
-    if len(rows) > stop:
+    if len(rows) > the.stop:
       lohi, t.rows = fastmap(rows, x, y)
       n = len(t.rows) // 2
       t.lohi, t.mid = lohi, proj(x, lohi, t.rows[n])
@@ -275,7 +291,9 @@ def test_xval():
     k, pairs = t.cols.klass, []
     for train, test in xval(t.rows, n=3, m=10):
       tr   = clone(t, train)
-      tree = fastmapr(tr, tr.rows, stop=128)
+      the.stop, stop = 128, the.stop
+      tree = fastmapr(tr, tr.rows)
+      the.stop = stop
       for row in test:
         pairs += [(predict(tr, tree, row), row[k])]
     for c in sorted(confuse(pairs).values(), key=lambda c: -c.pd):
@@ -297,6 +315,18 @@ def test_opt():
   lo = min(y(t, r) for r in t.rows)
   print("true best %.2f | best of %s picked %.2f | random %.2f" %
         (lo, the.check, mid(best), mid(rnd)))
+
+def test_bins():
+  t = Tbl(csv(the.file))
+  rows = sorted(t.rows, key=lambda r: disty(t, r))
+  n = len(rows) // 4
+  for at in t.cols.x:
+    if type(t.cols.all[at]) is dict: continue
+    best = adds((r[at] for r in rows[:n]), Num())
+    rest = adds((r[at] for r in rows[n:]), Num())
+    top  = max(discretize(best, rest), key=lambda z: z.score)
+    print("%12s %8.2f .. %8.2f score %.2f" %
+          (t.cols.names[at], top.lo, top.hi, top.score))
 
 def test_all():
   for s, f in list(globals().items()):
