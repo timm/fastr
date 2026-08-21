@@ -7,75 +7,102 @@ Options:
   -h             show help
   --p=2          minkowski coeffeience
   --stop=4       stopping rule for recursive tree generation
+  --few=256      sub-sample size for pole finding
+  --k=5          nearest neighbors used in a leaf
+  --check=5      optimization: how many top picks to evaluate
   --seed=1234    random number genration
-  --file=/Users/timm/gits/moot/optimize/misc/auto93.csv""" 
-
+  --file=/Users/timm/gits/moot/optimize/misc/auto93.csv
+ """ 
 import re, sys; sys.dont_write_bytecode = True
+from math import exp,cos,log
 from types import SimpleNamespace as o
-from random import choice,sample,seed,random as rand
+from random import choice,sample,seed,shuffle,random as rand
+
 BIG=1e32
 
 # ---------------------------------------------------------------
-Sym=dict
+def atom(s): # string --> atom
+  try: return int(s)
+  except ValueError:
+    try: return float(s)
+    except ValueError: return s.strip()
 
-Num=lambda: (0,BIG,0,-BIG) # n lo mu hi
+def csv(f): # csv file strings --> rows of atoms
+  with open(f, encoding="utf-8") as fs: 
+    for s in fs:
+      if s := s.strip(): yield [atom(x) for x in s.split(",")]
 
-def Tbl(src):
+Sym=dict            # where to track columns of symbols
+Num=lambda: (0,0,0) # n mu m2. where to tracjkcolumns of numbers
+
+def Col(s): # Nums start with an upper case letter
+  return Num() if s[0].isupper() else Sym()
+
+def Cols(names): # names --> list[Sym|Num]; grouped into 'x,y'.
+  x,y,all,klass = {},{},[],None
+  for at, name in enumerate(names):
+    all += [Col(name)]
+    if name[-1] == "X": continue
+    elif name[-1] == "!": klass = at
+    else: (y if name[-1] in "+-" else x)[at] = name[-1] == "+"
+  return o(it=Cols, all=all, x=x, y=y, klass=klass, names=names)
+
+def Tbl(src): # where to track rows and columns
   src = iter(src)
-  return adds(src, o(rows=[], cols=Cols(next(src))))
+  return adds(src, o(it=Tbl, rows=[], cols=Cols(next(src))))
 
-def Cols(names): # turn a list of names into Syms or Nums
-  all,x,y=[],{},{}
-  for at, s in enumerate(names):
-    all += [(Num if s[0].isupper() else Sym)()]
-    if s[-1] == "X": continue
-    (y if s[-1] in "+-" else x)[at] = s[-1] == "+"
-  return o(all=all, x=x, y=y, names=names)
+def add(i, v, w=1): # add one value
+  if v!="?":
+    if   type(i) is tuple: i = welford(*i, v, w)
+    elif type(i) is dict : i[v] = i.get(v,0) + w
+    elif i.it is Cols    : i.all = [add(c,v1,w) for c,v1 in zip(i.all,v)]
+    elif i.it is Tbl     : i.rows += [v]; add(i.cols,v, w)
+  return i
 
-def adds(src, i=None):
+def clone(tbl, rows=()): # new empty Tbl, same column structure
+  return adds(rows, o(it=Tbl, rows=[], cols=Cols(tbl.cols.names)))
+
+def adds(src, i=None): # add in all values in src.
   i = Num() if i is None else i
   for v in src: i = add(i, v)
   return i
 
-def add(i, v):
-  if v=="?": return i
-  if type(i) is dict: i[v] = i.get(v,0) + 1
-  elif type(i) is tuple:
-    n,lo,mu,hi = i
-    n += 1
-    i = (n, min(lo,v), mu+(v-mu)/n, max(hi,v))
-  else: 
-    i.rows += [v]
-    i.cols.all = [add(c,v1) for c,v1 in zip(i.cols.all,v)]
-  return i
+def welford(n,mu,m2, v, w):  # update a Num
+  n += w
+  if n < 1: return Num()
+  d   = v - mu
+  mu += w * d / n
+  m2 += w * d * (v - mu)
+  return (n, mu, m2)
 
-def mid(i):
-  if type(i) is dict: return max(i, key=i.get)
-  elif type(i) is tuple: return i[2]
-  else: return [mid(col) for col in i.cols.all]
+def mids(tbl, cols=None): # return middle of columns
+  return [mid(col) for col in cols or tbl.cols.all]
 
-# def spans(best, rest, more=()):
-#   cuts = sorted({best.lo, best.mu, best.hi, rest.lo, rest.mu, rest.hi, *more})
-#   return [(cuts[i], cuts[j]) for i in range(len(cuts)) for j in range(i+1, len(cuts))]
-#
-# pick = max(spans(best, rest), key=lambda ab: score(ab, best, rest))
-#
+def mid(col):  # return the middle of distributions
+  return col[1] if type(col) is tuple else max(col, key=col.get) 
+
+def sd(num): # a diversity measure for Numeric columns
+  n,mu,m2 = num; return 0 if n <= 1 else (m2/(n - 1))**0.5 
+
+def ent(d): # a diversity measure for Symbolic columns
+  N = sum(d.values())
+  return -sum(n/N*log(n/N,2) for n in d.values() if n > 0)
 
 # ---------------------------------------------------------------
-def disty(tbl, row):
+def disty(tbl, row): # distance of goals to the reference optimum
   d,n,p = 0, 1/BIG, the.p
   for c,w in tbl.cols.y.items():
     v = norm(tbl.cols.all[c], row[c])
     if v != "?": n,d = n + 1, d + abs(v - w)**p
   return (d/n) ** (1/p)
 
-def distx(tbl, row1,row2):
+def distx(tbl, row1,row2): # distance between none-goal balues
   d,n,p = 0, 1/BIG, the.p
   for c in tbl.cols.x:
-    n,d = n + 1, d + distx1(tbl.cols.all[c], row1[c],row2[c])**p
+    n,d = n + 1, d + distxq(tbl.cols.all[c], row1[c],row2[c])**p
   return (d/n) ** (1/p)
 
-def distx1(col,a,b):
+def distxq(col,a,b):
   if a==b=="?": return 1
   if type(col) is dict: return a != b
   a,b = norm(col,a), norm(col,b)
@@ -83,24 +110,45 @@ def distx1(col,a,b):
   if b=="?": b = 1 if a < 0.5 else 0
   return abs(a-b)
 
-def norm(col, i): # maps i ==> 0..1
-  _,lo,mu,hi = col
+def norm(col, i): # maps i ==> 0..1 via logistic cdf approx
   if i=="?": return i
-  if i <= lo: return 0
-  if i >= hi: return 1
-  w = hi - lo
-  if i <= mu: return (i-lo)**2 / (w*(mu-lo))
-  return 1 - (hi-i)**2 / (w*(hi-mu))
+  z = (i - col[1]) / (sd(col) + 1/BIG)
+  return 1 / (1 + exp(-1.7 * max(-3, min(3, z))))
 
 # ---------------------------------------------------------------
-def proj(x, lohi, row): 
+def confuse(pairs): # [(got,want)] --> per-class acc,pd,pf,prec
+  out = {k: o(label=k, tp=0, fp=0, fn=0, tn=0)
+         for g, w in pairs for k in (g, w)}
+  for got, want in pairs:
+    for k, c in out.items():
+      if   k == want: c.tp += got == want; c.fn += got != want
+      elif k == got : c.fp += 1
+      else          : c.tn += 1
+  for c in out.values():
+    c.acc  = (c.tp + c.tn) / (c.tp+c.fn+c.fp+c.tn + 1/BIG)
+    c.pd   = c.tp / (c.tp + c.fn + 1/BIG)  # recall
+    c.pf   = c.fp / (c.fp + c.tn + 1/BIG)  # false alarm
+    c.prec = c.tp / (c.tp + c.fp + 1/BIG)
+  return out
+
+def xval(rows, n=5, m=5): # m repeats of n-fold cross-val
+  rows = rows[:]
+  for _ in range(m):
+    shuffle(rows)
+    for j in range(n):
+      yield ([r for i, r in enumerate(rows) if i % n != j],
+             rows[j::n])                                  
+
+# ---------------------------------------------------------------
+def proj(x, lohi, row): # project x onto a line a -> b
   a,b = x(row, lohi.lo), x(row, lohi.hi)
   return (a*a + lohi.c*lohi.c - b*b) / (2*lohi.c + 1/BIG)
 
 def fastmap(rows, x, y):
-  w = choice(rows)
-  a = max(rows, key=lambda r: x(w, r))
-  b = max(rows, key=lambda r: x(a, r))
+  some = sample(rows, min(the.few, len(rows)))
+  w    = choice(some)
+  a    = max(some, key=lambda r: x(w, r))
+  b    = max(some, key=lambda r: x(a, r))
   if y(b) < y(a): a, b = b, a
   lohi = o(lo=a, hi=b, c=x(a, b))
   return lohi, sorted(rows, key=lambda r: proj(x, lohi, r))
@@ -119,6 +167,12 @@ def fastmapr(tbl, rows, stop=None):
     return t
   return go(rows)
 
+def predict(tbl, tree, row, k=None): # klass of k nearest in leaf
+  rows = sorted(leaf(tbl, tree, row).rows,
+                key=lambda r: distx(tbl, row, r))[:k or the.k]
+  at = tbl.cols.klass
+  return mid(adds((r[at] for r in rows), Col(tbl.cols.names[at])))
+
 def leaf(tbl, t, row):
   x = lambda r1, r2: distx(tbl, r1, r2)
   while hasattr(t, "mid"):
@@ -127,33 +181,23 @@ def leaf(tbl, t, row):
   return t
  
 # ---------------------------------------------------------------
-def it(s):
-  try: return int(s)
-  except ValueError:
-    try: return float(s)
-    except ValueError: return s.strip()
-
-def csv(f):
-  with open(f, encoding="utf-8") as fs: 
-    for s in fs:
-      if s := s.strip(): yield [it(x) for x in s.split(",")]
-
-# ---------------------------------------------------------------
 def test_h()     : print(__doc__)
 def test_the()   : print(the)
 def test__seed(s): the.seed = s
 def test__file(f): the.file = f
 
-def test_it():
-  assert it("2") == 2 and it("2.1") == 2.1
-  assert it(" a ") == "a"
+def test_atom():
+  assert atom("2") == 2 and atom("2.1") == 2.1
+  assert atom(" a ") == "a"
 
 def test_num():
   i = Num()
   for _ in range(100): i = add(i, rand())
-  n,lo,mu,hi = i
-  assert n == 100 and 0 <= lo <= mu <= hi <= 1
-  assert abs(mu - 0.5) < 0.1
+  n,mu,m2 = i
+  assert n == 100 and abs(mu - 0.5) < 0.1
+  assert abs(sd(i) - 12**-0.5) < 0.05
+  i = add(add(i, 0.5), 0.5, w=-1)     # add then subtract
+  assert abs(i[1] - mu) < 1e-9 and i[0] == n
 
 def test_sym():
   i = adds("aabbbc", Sym())
@@ -168,7 +212,7 @@ def test_tbl():
   print(len(t.rows), "rows; x:", list(t.cols.x), "y:", t.cols.y)
 
 def test_mid():
-  print(mid(Tbl(csv(the.file))))
+  print(mids(Tbl(csv(the.file))))
 
 def test_norm():
   num = adds(sample(range(1000), 100), Num())
@@ -214,6 +258,46 @@ def test_leaf():
   assert len(l.rows) <= the.stop
   print("row 0 lands with", len(l.rows), "rows")
 
+def test_confuse():
+  pairs = [("a","a")]*4 + [("b","a")] + \
+          [("b","b")]*2 + [("a","b")]
+  a = confuse(pairs)["a"]
+  assert a.tp == 4 and a.fn == 1 and a.fp == 1 and a.tn == 2
+  assert a.pd == 0.8 and abs(a.prec - 0.8) < 1e-9
+  for c in confuse(pairs).values():
+    print(c.label, "acc %.2f pd %.2f pf %.2f prec %.2f" %
+          (c.acc, c.pd, c.pf, c.prec))
+
+def test_xval():
+  for f in ["diabetes", "soybean"]:
+    print("\n##", f)
+    t = Tbl(csv(f"/Users/timm/gits/moot/classify/{f}.csv"))
+    k, pairs = t.cols.klass, []
+    for train, test in xval(t.rows, n=3, m=10):
+      tr   = clone(t, train)
+      tree = fastmapr(tr, tr.rows, stop=128)
+      for row in test:
+        pairs += [(predict(tr, tree, row), row[k])]
+    for c in sorted(confuse(pairs).values(), key=lambda c: -c.pd):
+      print("%25s acc %.2f pd %.2f pf %.2f prec %.2f" %
+            (c.label, c.acc, c.pd, c.pf, c.prec))
+
+def test_opt():
+  t = Tbl(csv(the.file))
+  y = lambda tbl, r: disty(tbl, r)
+  best, rnd = Num(), Num()
+  for train, test in xval(t.rows, n=3, m=10):
+    tr   = clone(t, train)
+    tree = fastmapr(tr, tr.rows)
+    score = lambda r: mid(adds((y(tr, r1)
+                    for r1 in leaf(tr, tree, r).rows), Num()))
+    picks = sorted(test, key=score)[:the.check]
+    best  = add(best, min(y(tr, r) for r in picks))
+    rnd   = add(rnd,  min(y(tr, r) for r in sample(test, the.check)))
+  lo = min(y(t, r) for r in t.rows)
+  print("true best %.2f | best of %s picked %.2f | random %.2f" %
+        (lo, the.check, mid(best), mid(rnd)))
+
 def test_all():
   for s, f in list(globals().items()):
     if re.match(r"test_(?!_|all)", s): print("\n#", s); run(f)
@@ -223,11 +307,13 @@ def run(f, *v):
   try: seed(the.seed); f(*v)
   except Exception: import traceback; traceback.print_exc()
 
-the=o(**{k:it(v) for k,v in re.findall(r"(\w+)=(\S+)",__doc__)})
+the=o(**{k:atom(v) for k,v in re.findall(r"(\w+)=(\S+)",__doc__)})
 seed(the.seed)
 
-if __name__ == "__main__":
+def main():
   for s, v in zip(sys.argv, sys.argv[1:] + [None]):
     if f := globals().get(f"test{s.replace('-', '_')}"):
-      if s[1] == "-": run(f, it(v))
-      else:           run(f) 
+      run(f, atom(v)) if s[1] == "-" else run(f)
+
+if __name__ == "__main__": main()
+
