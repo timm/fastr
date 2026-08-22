@@ -44,6 +44,16 @@ function keysort(t,fun,      tmp,u) -- sorted copy, order fun
   for i,p in ipairs(tmp) do u[i] = p[2] end
   return u end
 
+function items(src,      n) -- anything --> a function
+  -- nil: identity. int: column getter. function: itself.
+  -- list: an iterator over its items.
+  if src == nil then return function(x) return x end end
+  if type(src) == "number" then
+    return function(x) return x[src] end end
+  if type(src) == "function" then return src end
+  n = 0
+  return function() n = n + 1; return src[n] end end
+
 function most(fun,      b) -- carried max: f(x) adds, f() gets
   return function(x)
     if x ~= nil and (b == nil or fun(x) > fun(b)) then b = x end

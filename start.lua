@@ -1,9 +1,6 @@
--- start: config and a tiny test-runner CLI.
--- (c) 2026 Tim Menzies <timm@ieee.org> MIT license
 local lib = require"lib"
 local _ENV = setmetatable({}, {__index=lib})
-
-help = [[
+the,help = {},[[
 start: config and a tiny test-runner CLI.
 (c) 2026 Tim Menzies <timm@ieee.org> MIT license
 
@@ -21,9 +18,46 @@ Options:
   --seed=1234    random number generation
   --file=/Users/timm/gits/moot/optimize/misc/auto93.csv]]
 
-the = {}
-for k,v in help:gmatch("[-][-](%w+)=(%S+)") do the[k]=atom(v) end
-lib.SEED = the.seed
+function atom(s) -- string --> number or trimmed string
+  if type(s) ~= "string" then return s end
+  return tonumber(s) or s:match"^%s*(.-)%s*$" end
+
+for k,v in help:gmatch("(%w+)=(%S+)") do the[k]=atom(v) end
+
+function csv(file,      f) -- iterate a csv file's atom rows
+  f = assert(io.open(file))
+  return function(    s,t) 
+    s = f:read()
+    if s == nil then f:close() else
+      t={}; for x in s:gmatch"([^,]+)" do t[#t+1]=atom(x) end
+      return t end end end
+
+Num,Sym = {},{}
+
+function Sym.new() return {} end
+function Num.new() return {n=0,mu=0,m2=0} end
+function Col(s)    return (s:find"^%u" and Num or Sym).new() end
+
+function Cols(names,     i,z)
+  i = {names=names, all={}, x={}, y={}, klass=nil}
+  for at,name in ipairs(names) do
+    i.all[at] = Col(name)
+    roles(i, name:sub(-1), at) end
+  return i end
+
+function roles(i,z,at)
+  if z ~= "X" then
+    if     z == "!" then i.klass = at
+    elseif z == "+" then i.y[at] = 1
+    elseif z == "-" then i.y[at] = 0
+    else   i.x[at] = at end end end
+
+function adds(src,i) -- src: list or iterator; f: see fun()
+  i = i or Num()
+  if type(src)=="table" 
+  then for _,x in ipairs(src) do add(i,x) end
+  else for x in src           do add(i, x) end
+  return i end
 
 function run(f,      ok,err) -- reseed, call f, catch crashes
   lib.SEED = the.seed

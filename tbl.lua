@@ -49,9 +49,9 @@ function add(i,v,w) -- add value (or row) v, weight w
     else   i[v] = (i[v] or 0) + w end end
   return i end
 
-function adds(t,i) -- add all of list t into i (default: Num)
-  i = i or Num()
-  for _,v in ipairs(t) do add(i,v) end
+function adds(src,i,f) -- src, f: anything items() accepts
+  i, f = i or Num(), items(f)
+  for x in items(src) do add(i, f(x)) end
   return i end
 
 function welford(i,v,w,      n,d) -- update a Num in place
