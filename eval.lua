@@ -105,7 +105,7 @@ function test_ranks() -- same rank iff same distribution
     d.x3[i] = rand() + 0.5
     d.x4[i] = rand() + 2 end
   local r = ranks(d)
-  print(cat(r))
+  print(say(r))
   assert(r.x1 == r.x2 and r.x2 < r.x3 and r.x3 < r.x4) end
 
 function test_xval() -- cross-val: diabetes and soybean
@@ -146,5 +146,5 @@ function test_opt() -- optimizer: tree picks beat random
   print(("true best %.2f | best of %s picked %.2f | random %.2f")
         :format(lo, the.check, mid(best), mid(rnd))) end
 
-if not pcall(debug.getlocal, 4, 1) then main(_ENV) end
+if arg[0]:find("eval.lua",1,true) then main(_ENV) end
 return _ENV

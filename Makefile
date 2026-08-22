@@ -13,3 +13,11 @@ xargs: ## run What+Flag on every Data csv, Cpu at a time
 
 ~/tmp/contrast.txt: ## save the sorted xargs run here
 	@$(MAKE) -s xargs | tee $@
+
+~/tmp/%.lua.pdf: %.lua ## .lua ==> .pdf (make ~/tmp/x.lua.pdf)
+	@mkdir -p ~/tmp
+	@echo "pdf-ing $@ ..."
+	@a2ps -BrElua --chars-per-line=80 --file-align=fill \
+	  --line-numbers=1 --borders=no --pro=color --columns=3 \
+	  -M letter -o - $< | ps2pdf - $@
+	@open $@

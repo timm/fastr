@@ -83,7 +83,7 @@ function test_distx() -- symmetric, zero on self, in 0..1
     assert(d >= 0 and d <= 1) end
   print(("d(r1,r1) %.2f | d(r1,r2) %.2f")
         :format(distx(t,r1,r1), distx(t,r1,r2)))
-  print("r1 "..cat(r1).."\nr2 "..cat(r2)) end
+  print("r1 "..say(r1).."\nr2 "..say(r2)) end
 
 function test_fastmap() -- rows sorted along a line of 2 poles
   local t = Tbl(csv(the.file))
@@ -94,7 +94,7 @@ function test_fastmap() -- rows sorted along a line of 2 poles
   for _,r in ipairs(rows) do
     local p = proj(x,lohi,r)
     assert(p >= last); last = p end
-  print("pole1 "..cat(lohi.lo).."\npole2 "..cat(lohi.hi))
+  print("pole1 "..say(lohi.lo).."\npole2 "..say(lohi.hi))
   print(("separation %.2f"):format(lohi.c)) end
 
 function test_cluster() -- print tree; leaf counts sum to n
@@ -107,5 +107,5 @@ function test_cluster() -- print tree; leaf counts sum to n
   show(tr)
   print(#leaves(tr).." leaves") end
 
-if not pcall(debug.getlocal, 4, 1) then main(_ENV) end
+if arg[0]:find("unsuper.lua",1,true) then main(_ENV) end
 return _ENV

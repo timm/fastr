@@ -78,35 +78,9 @@ function welford(i,v,w)
     i.mu = i.mu + w*d/i.n
     i.m2 = i.m2 + w*d*(v - i.mu) end end
 
-function mids(tbl,    cols)
-  u={}; for at,c in ipairs(tbl.cols.all) do u[1+#u]=mid(c) end 
-  return u end
-
-function mid(col)
-  if col.mu then return col.mu end
-  mode,n = nil,0
-  for k,v in pairs(col) do if v>n then mode,n = k,v end end
-  return mode end
-
-function sd(num) -- diversity of a Num
-  return num.n <= 1 and 0 or (num.m2/(num.n-1))^0.5 end
-
-function ent(d,      N,e) -- diversity of a Sym
-  N,e = 0,0
-  for _,n in pairs(d) do N = N + n end
-  for _,n in pairs(d) do if n>0 then e=e - n/N*log(n/N,2) end end
-  return e end
-
-function norm(col,x,      z) -- x --> 0..1, logistic cdf
-  if x == "?" then return x end
-  z = (x - col[2]) / (sd(col) + 1/BIG)
-  z = max(-3, min(3, z))
-  return 1/(1 + exp(-1.7 * z)) end
-
 function sort(t,f) table.sort(t,f); return t end
 
-log,exp,min,max = math.log,math.exp,math.min,math.max
-floor,cat       = math.floor,table.concat
+floor,cat = math.floor,table.concat
 
 function say(t,      u) -- anything --> string, tidy numbers
   if type(t)=="number" then
@@ -117,11 +91,6 @@ function say(t,      u) -- anything --> string, tidy numbers
     u[#u+1] = (#t>0 and "" or k.."=")..say(v) end
   return "{"..cat(#t==0 and sort(u) or u,", ").."}" end
 
-function run(f,      ok,err) -- reseed, call f, catch crashes
-  lib.SEED = the.seed
-  ok,err = pcall(f)
-  if not ok then print(err) end end
-
 SEED = the.seed
 function rand(lo,hi) -- pseudo-random lo..hi (default 0..1)
   lo, hi = lo or 0, hi or 1
@@ -129,14 +98,31 @@ function rand(lo,hi) -- pseudo-random lo..hi (default 0..1)
   return lo + (hi - lo) * SEED / 2147483647 end
 
 function rint(lo,hi) -- pseudo-random integer lo..hi
-  return floor(0.5 + rand(lo,hi)) end
+  return math.floor(0.5 + rand(lo,hi)) end
 
-if arg[0] and arg[0]:find"nb" then
-  for j,s in pairs(arg) do if eg[s] then eg[s](arg[j+1]) end end end
+function run(f,      ok,err) -- reseed, call f, catch crashes
+  SEED = the.seed
+  ok,err = pcall(f)
+  if not ok then print(err) end end
+
+eg = eg or {} -- demo table: eg["-x"] = function(v) ... end
+
+if arg[0] and arg[0]:find"flair" then
+  for j,s in ipairs(arg) do
+    if eg[s] then eg[s](arg[j+1]) end
+    s = s:gsub("^[-]+","")
+    if the[s] ~= nil then the[s]=atom(arg[j+1]) end end end 
+
+function demos(env,      t,k,doc) -- local test_ funs, in order
+  t = {}
+  for line in io.lines(arg[0]) do
+    k,doc = line:match"^function%s+(test_[%w_]+).-[-][-]%s*(.*)"
+    if k and rawget(env,k) then t[#t+1] = {k,doc} end end
+  return t end
 
 function main(env,      k,eq,v,f) -- -demo | --setting value
   for i,s in ipairs(arg) do
-    for k,eq,v = s:match"^[-][-](%w+)(=?)(.*)"
+    k,eq,v = s:match"^[-][-](%w+)(=?)(.*)"
     if s == "-h" then
       print(help.."\n\nDemos:\n")
       for _,kf in ipairs(demos(env)) do

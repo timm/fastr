@@ -1,6 +1,12 @@
 -- lib: general helpers (random, lists, strings, csv).
 -- (c) 2026 Tim Menzies <timm@ieee.org> MIT license
 local _ENV = setmetatable({}, {__index=_G})
+floor, cat = math.floor, table.concat
+
+function sort(t,f) table.sort(t,f); return t end
+
+function o(t) -- table that prints itself via say
+  return setmetatable(t, {__tostring=say}) end
 
 BIG  = 1e32
 SEED = 1234
@@ -59,21 +65,14 @@ function most(fun,      b) -- carried max: f(x) adds, f() gets
     if x ~= nil and (b == nil or fun(x) > fun(b)) then b = x end
     return b end end
 
-function cat(t,      u,n,ks) -- anything --> string
-  if type(t) == "number" then return ("%g"):format(t) end
-  if type(t) ~= "table"  then return tostring(t) end
-  u, n = {}, 0
-  for _ in pairs(t) do n = n + 1 end
-  if n == #t then
-    for _,v in ipairs(t) do u[#u+1] = cat(v) end
-  else
-    ks = {}
-    for k in pairs(t) do ks[#ks+1] = k end
-    table.sort(ks, function(a,b)
-      return tostring(a) < tostring(b) end)
-    for _,k in ipairs(ks) do
-      u[#u+1] = tostring(k).."="..cat(t[k]) end end
-  return "{"..table.concat(u, ", ").."}" end
+function say(t,      u) -- anything --> string, tidy numbers
+  if type(t)=="number" then
+    return (t==floor(t) and "%d" or "%.3f"):format(t) end
+  if type(t)~="table" then return tostring(t) end
+  u={}
+  for k,v in pairs(t) do
+    u[#u+1] = (#t>0 and "" or k.."=")..say(v) end
+  return "{"..cat(#t==0 and sort(u) or u,", ").."}" end
 
 function csv(file,      f) -- iterate a csv file's atom rows
   f = assert(io.open(file))

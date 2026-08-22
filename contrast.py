@@ -95,4 +95,9 @@ def test_halve():
                            z.score if z else 0,
                            z.txt if z else "no split"))
 
-if __name__ == "__main__": main(globals())
+eg = {
+      "-discretize": test_discretize,
+      "-contrasts": test_contrasts,
+      "-halve": test_halve}
+
+if __name__ == "__main__": main(meta(eg))

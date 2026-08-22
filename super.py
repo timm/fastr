@@ -104,4 +104,10 @@ def test_classify():
   print("resub acc %.2f" % acc)
   assert acc > 0.7
 
-if __name__ == "__main__": main(globals())
+eg = {
+      "-disty": test_disty,
+      "-split": test_split,
+      "-tree": test_tree,
+      "-classify": test_classify}
+
+if __name__ == "__main__": main(meta(eg))

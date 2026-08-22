@@ -82,9 +82,9 @@ function test_disty() -- sort rows by goals; show best, worst
   local lst = keysort(t.rows,
                 function(r) return disty(t,r) end)
   assert(disty(t,lst[1]) < disty(t,lst[#lst]))
-  print(cat(t.cols.names))
+  print(say(t.cols.names))
   for _,j in ipairs{1,2,3,#lst-2,#lst-1,#lst} do
-    print(cat(lst[j]), ("d %.2f"):format(disty(t,lst[j]))) end
+    print(say(lst[j]), ("d %.2f"):format(disty(t,lst[j]))) end
 end
 
 function test_split() -- show split minimizing goal spread
@@ -112,5 +112,5 @@ function test_classify() -- resubstitution accuracy, diabetes
   print(("resub acc %.2f"):format(acc))
   assert(acc > 0.7) end
 
-if not pcall(debug.getlocal, 4, 1) then main(_ENV) end
+if arg[0]:find("super.lua",1,true) then main(_ENV) end
 return _ENV

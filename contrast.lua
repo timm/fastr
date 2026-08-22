@@ -109,5 +109,5 @@ function test_halve() -- one line: best split of two halves
   print(("%-45s %.2f %s"):format(the.file:match"([^/]+)$",
         z and z.score or 0, z and z.txt or "no split")) end
 
-if not pcall(debug.getlocal, 4, 1) then main(_ENV) end
+if arg[0]:find("contrast.lua",1,true) then main(_ENV) end
 return _ENV

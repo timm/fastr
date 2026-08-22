@@ -160,4 +160,13 @@ def test_xy():
     print("bin %2s origin %-22s Lbs mu %5.0f sd %4.0f" %
           (b, xy1.seen[b], xy2.seen[b][1], sd(xy2.seen[b])))
 
-if __name__ == "__main__": main(globals())
+eg = {
+      "-num": test_num,
+      "-sym": test_sym,
+      "-tbl": test_tbl,
+      "-mid": test_mid,
+      "-norm": test_norm,
+      "-cdf": test_cdf,
+      "-xy": test_xy}
+
+if __name__ == "__main__": main(meta(eg))

@@ -123,4 +123,11 @@ def test_opt():
   print("true best %.2f | best of %s picked %.2f | random %.2f" %
         (lo, the.check, mid(best), mid(rnd)))
 
-if __name__ == "__main__": main(globals())
+eg = {
+      "-confuse": test_confuse,
+      "-stats": test_stats,
+      "-ranks": test_ranks,
+      "-xval": test_xval,
+      "-opt": test_opt}
+
+if __name__ == "__main__": main(meta(eg))

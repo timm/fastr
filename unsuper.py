@@ -92,4 +92,9 @@ def test_cluster():
   show(tree)
   print(len(leaves(tree)), "leaves")
 
-if __name__ == "__main__": main(globals())
+eg = {
+      "-distx": test_distx,
+      "-fastmap": test_fastmap,
+      "-cluster": test_cluster}
+
+if __name__ == "__main__": main(meta(eg))

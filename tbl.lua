@@ -107,19 +107,19 @@ function test_sym() -- Sym counts symbols; mid is the mode
   local i = Sym()
   for c in ("aabbbc"):gmatch"." do add(i,c) end
   assert(i.b == 3 and mid(i) == "b")
-  print(cat(i), "mid: "..mid(i)) end
+  print(say(i), "mid: "..mid(i)) end
 
 function test_tbl() -- load the.file; find rows and x,y columns
   local t = Tbl(csv(the.file))
   assert(#t.rows > 100 and next(t.cols.x) and next(t.cols.y))
-  print(#t.rows.." rows; x: "..cat(t.cols.x)..
-        " y: "..cat(t.cols.y)) end
+  print(#t.rows.." rows; x: "..say(t.cols.x)..
+        " y: "..say(t.cols.y)) end
 
 function test_mid() -- show middle of every column in the.file
   local t = Tbl(csv(the.file))
   local m = mids(t)
   assert(#m == #t.cols.names)
-  print(cat(m)) end
+  print(say(m)) end
 
 function test_norm() -- norm maps to 0..1, monotonically
   local num = Num()
@@ -150,5 +150,5 @@ function test_cdf() -- norm(hi)-norm(lo) ~ mass inside lo..hi
           :format(lo,hi,got,want))
     assert(math.abs(got - want) < 0.05) end end
 
-if not pcall(debug.getlocal, 4, 1) then main(_ENV) end
+if arg[0]:find("tbl.lua",1,true) then main(_ENV) end
 return _ENV

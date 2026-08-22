@@ -43,24 +43,25 @@ def run(f, *v):
   try: seed(the.seed); f(*v)
   except Exception: import traceback; traceback.print_exc()
 
-def demos(g): # a demo = local test_ function with a docstring
-  return {k[5:]: f for k, f in list(g.items())
-          if k.startswith("test_") and f.__doc__
-          and f.__module__ == g["__name__"]}
+def meta(eg): # give a demo table its --all and --egs entries
+  def _all():
+    "run all demos, in table order"
+    for k, f in eg.items():
+      if k[1] != "-": print("\n#", k); run(f)
+  def _egs():
+    "show the demo table"
+    for k, f in eg.items():
+      print("%-14s %s" % (k, (f.__doc__ or "").strip()))
+  eg["--all"], eg["--egs"] = _all, _egs
+  return eg
 
-def main(g): # single dash = local demo, double dash = setting
+def main(eg): # run eg["-flag"]; else --setting gets a value
   for s, v in zip(sys.argv, sys.argv[1:] + [None]):
-    if s == "-h":
-      print(__doc__ + "\nDemos:\n")
-      for k, f in demos(g).items():
-        print("  -%-13s %s" % (k, f.__doc__.strip()))
-    elif s == "-all":
-      for k, f in demos(g).items(): print("\n#", k); run(f)
-    elif s.startswith("--"): # --key=value or --key value
+    if f := eg.get(s): run(f)
+    elif s == "-h": print(__doc__)
+    elif s.startswith("--"):
       k, eq, v1 = s[2:].partition("=")
       if hasattr(the, k): setattr(the, k, atom(v1 if eq else v))
-    elif f := demos(g).get(s[1:].replace("-", "_")):
-      run(f)
 
 
 # ---------------------------------------------------------------
@@ -82,4 +83,9 @@ def test_csv():
   print(len(rows), "rows; first:", rows[0])
 
 seed(the.seed)
-if __name__ == "__main__": main(globals())
+eg = {
+      "-the": test_the,
+      "-atom": test_atom,
+      "-csv": test_csv}
+
+if __name__ == "__main__": main(meta(eg))
